@@ -13,20 +13,14 @@ int pinY[5]={
             RPI_GPIO_P1_12,
             RPI_GPIO_P1_15,
             RPI_GPIO_P1_19};
-int test_world_r[5]={
-            0b11110,
-            0b10001,
-            0b11110,
-            0b10100,
-            0b10010 };
-int test_world_j[5]={
-            0b00001,
-            0b00001,
-            0b10001,
-            0b10001,
-            0b01110 };
+int world[5]={
+            0b00000,
+            0b00000,
+            0b00111,
+            0b00100,
+            0b00010 };
 
-void high(int x,int y) {
+void alive(int x,int y) {
     int i;
     for (i=0;i<5;i++) {
         bcm2835_gpio_write(pinY[i], HIGH);
@@ -36,19 +30,61 @@ void high(int x,int y) {
     bcm2835_gpio_write(pinX[x], HIGH);
     bcm2835_delay(1);
 }
-int scan(int arr[],int time) {
-    int line,t,x,y;
-    for(t=0;t<time;t++) {
-        for(y=0;y<5;y++) {
-            line = arr[y];
-            for(x=4;x>=0;x--) {
-                if(line & 0b00001 == 0b00001){
-                    high(x,y);
-                    //bcm2835_delay(1);
-                }
-                line = line>>1;
+int count(int now[],int cellX,int cellY) {
+    int line,x,y;
+    int count=0;
+    for (y=cellY-1;y<=cellY+1;y++) {
+        if (y<0||y>4)
+            continue;
+        line=now[y];
+        for (x=cellX-1;x<=cellX+1;x++) {
+            if (x<0||x>4)
+                continue;
+            if (((line<<x) & 0b10000) && !(x==cellX && y==cellY)) {
+                count++;
             }
         }
+    }
+    return count;
+}
+int step(int now[],int time) {
+    int next[5]={0,0,0,0,0};
+    int c,end=0;
+    int line,t,x,y;
+    for (t=0;t<time;t++) {
+        for (y=0;y<5;y++) {
+            line=now[y];
+            for (x=0;x<5;x++) {
+                c = count(now,x,y);
+                if ((line<<x) & 0b10000){
+                    alive(x,y);
+                    if (c==2||c==3){
+                        next[y] |= 0b10000>>x;
+                    } else {
+                        next[y] &= ~0b10000>>x;
+                    }
+                } else {
+                    if (c==3){
+                        next[y] |= 0b10000>>x;
+                    } else {
+                        next[y] &= ~0b10000>>x;
+                    }
+                }
+                printf("%d (%d,%d)\n",c,x,y);
+            }
+        }
+    }
+    for (y=0;y<5;y++) {
+         line=now[y];
+         if (line==next[y]) 
+             end++;
+    }
+    if (end==5) {
+        //restart
+        end=0;
+        step(world,time);
+    } else {
+        step(next,time);
     }
 }
 
@@ -69,12 +105,10 @@ int main()
         }
     }
 
-    while (1)
-    {
-        scan(test_world_r,50);
-        scan(test_world_j,50);
+    printf("start\n");
+ 
+    step(world,40);
 
-    }
     bcm2835_close();
     return 0;
 }
